@@ -1,14 +1,24 @@
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/api-client.ts";
+import { queryKeys } from "@/lib/query-keys.ts";
+import type { Property } from "@/lib/api-types.ts";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { MapPin, User, ExternalLink, Copy } from "lucide-react";
 import { toast } from "sonner";
-import { AddPropertyButton, EditPropertyButton, DeletePropertyButton } from "./_components/PropertyCrud.tsx";
+import {
+  AddPropertyButton,
+  EditPropertyButton,
+  DeletePropertyButton,
+} from "./_components/PropertyCrud.tsx";
 
 const formatMXN = (amount: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(amount);
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 0,
+  }).format(amount);
 
 const typeStyle: Record<string, string> = {
   Casa: "text-blue-400 bg-blue-400/10",
@@ -23,7 +33,10 @@ const typeLabel: Record<string, string> = {
 };
 
 export default function PropertiesPage() {
-  const properties = useQuery(api.properties.list, {});
+  const properties = useQuery({
+    queryKey: queryKeys.properties,
+    queryFn: () => apiRequest<Property[]>("/api/properties"),
+  });
   const navigate = useNavigate();
 
   const copyOwnerLink = (owner: string) => {
@@ -42,20 +55,24 @@ export default function PropertiesPage() {
       >
         <div>
           <h1 className="text-xl font-bold tracking-tight">Properties</h1>
-          <p className="text-[13px] text-muted-foreground mt-0.5">Managed portfolio</p>
+          <p className="text-[13px] text-muted-foreground mt-0.5">
+            Managed portfolio
+          </p>
         </div>
         <AddPropertyButton />
       </motion.div>
 
-      {properties === undefined ? (
+      {properties.isPending ? (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-52 w-full rounded-xl" />)}
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-52 w-full rounded-xl" />
+          ))}
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {properties.map((p, i) => (
+          {(properties.data ?? []).map((p, i) => (
             <motion.div
-              key={p._id}
+              key={p.id}
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: i * 0.07 }}
@@ -64,19 +81,27 @@ export default function PropertiesPage() {
               {/* Top */}
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="text-[14px] font-semibold leading-tight truncate">{p.name}</h3>
-                  <span className={`inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${typeStyle[p.type] ?? "text-muted-foreground bg-muted"}`}>
+                  <h3 className="text-[14px] font-semibold leading-tight truncate">
+                    {p.name}
+                  </h3>
+                  <span
+                    className={`inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${typeStyle[p.type] ?? "text-muted-foreground bg-muted"}`}
+                  >
                     {typeLabel[p.type] ?? p.type}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                    p.status === "ocupado" ? "text-emerald-400 bg-emerald-400/10" : "text-yellow-400 bg-yellow-400/10"
-                  }`}>
+                  <span
+                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                      p.status === "ocupado"
+                        ? "text-emerald-400 bg-emerald-400/10"
+                        : "text-yellow-400 bg-yellow-400/10"
+                    }`}
+                  >
                     {p.status === "ocupado" ? "Occupied" : "Vacant"}
                   </span>
                   <EditPropertyButton property={p} />
-                  <DeletePropertyButton id={p._id} />
+                  <DeletePropertyButton id={p.id} />
                 </div>
               </div>
 
@@ -95,8 +120,12 @@ export default function PropertiesPage() {
               {/* Footer */}
               <div className="mt-auto pt-3 border-t border-border flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Monthly Rent</p>
-                  <p className="text-[16px] font-bold tabular-nums">{formatMXN(p.monthlyRent)}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                    Monthly Rent
+                  </p>
+                  <p className="text-[16px] font-bold tabular-nums">
+                    {formatMXN(p.monthlyRent)}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
@@ -107,7 +136,9 @@ export default function PropertiesPage() {
                     <Copy className="w-3 h-3" />
                   </button>
                   <button
-                    onClick={() => navigate(`/owner/${encodeURIComponent(p.owner)}`)}
+                    onClick={() =>
+                      navigate(`/owner/${encodeURIComponent(p.owner)}`)
+                    }
                     className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted cursor-pointer"
                     title="View owner portal"
                   >

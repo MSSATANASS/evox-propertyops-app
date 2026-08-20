@@ -1,14 +1,27 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog.tsx";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/api-client.ts";
+import { queryKeys } from "@/lib/query-keys.ts";
+import type { Property, PropertyPayload } from "@/lib/api-types.ts";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
-import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
 
 type PropertyForm = {
   name: string;
@@ -19,7 +32,14 @@ type PropertyForm = {
   status: string;
 };
 
-const empty: PropertyForm = { name: "", address: "", type: "Casa", owner: "", monthlyRent: "", status: "ocupado" };
+const empty: PropertyForm = {
+  name: "",
+  address: "",
+  type: "Casa",
+  owner: "",
+  monthlyRent: "",
+  status: "ocupado",
+};
 
 function PropertyDialog({
   trigger,
@@ -34,7 +54,8 @@ function PropertyDialog({
   const [form, setForm] = useState<PropertyForm>(initial ?? empty);
   const [saving, setSaving] = useState(false);
 
-  const set = (k: keyof PropertyForm, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: keyof PropertyForm, v: string) =>
+    setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
     if (!form.name || !form.address || !form.owner || !form.monthlyRent) {
@@ -54,33 +75,58 @@ function PropertyDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setForm(initial ?? empty); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) setForm(initial ?? empty);
+      }}
+    >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? "Edit property" : "New property"}</DialogTitle>
+          <DialogTitle>
+            {initial ? "Edit property" : "New property"}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <Field label="Name">
-            <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Casa Montecristo" />
+            <Input
+              value={form.name}
+              onChange={(e) => set("name", e.target.value)}
+              placeholder="Casa Montecristo"
+            />
           </Field>
           <Field label="Address">
-            <Input value={form.address} onChange={(e) => set("address", e.target.value)} placeholder="123 Main St, City" />
+            <Input
+              value={form.address}
+              onChange={(e) => set("address", e.target.value)}
+              placeholder="123 Main St, City"
+            />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Type">
               <Select value={form.type} onValueChange={(v) => set("type", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Casa">House</SelectItem>
                   <SelectItem value="Departamento">Apartment</SelectItem>
-                  <SelectItem value="Local Comercial">Commercial Space</SelectItem>
+                  <SelectItem value="Local Comercial">
+                    Commercial Space
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </Field>
             <Field label="Status">
-              <Select value={form.status} onValueChange={(v) => set("status", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={form.status}
+                onValueChange={(v) => set("status", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ocupado">Occupied</SelectItem>
                   <SelectItem value="desocupado">Vacant</SelectItem>
@@ -89,14 +135,29 @@ function PropertyDialog({
             </Field>
           </div>
           <Field label="Owner">
-            <Input value={form.owner} onChange={(e) => set("owner", e.target.value)} placeholder="John Smith" />
+            <Input
+              value={form.owner}
+              onChange={(e) => set("owner", e.target.value)}
+              placeholder="John Smith"
+            />
           </Field>
           <Field label="Monthly Rent (MXN)">
-            <Input type="number" value={form.monthlyRent} onChange={(e) => set("monthlyRent", e.target.value)} placeholder="18500" />
+            <Input
+              type="number"
+              value={form.monthlyRent}
+              onChange={(e) => set("monthlyRent", e.target.value)}
+              placeholder="18500"
+            />
           </Field>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-accent text-accent-foreground hover:bg-accent/90">
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+            >
               {saving ? "Saving..." : "Save"}
             </Button>
           </div>
@@ -106,7 +167,13 @@ function PropertyDialog({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1.5">
       <Label className="text-[12px] text-muted-foreground">{label}</Label>
@@ -116,24 +183,62 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export function AddPropertyButton() {
-  const create = useMutation(api.properties.create);
+  const queryClient = useQueryClient();
+  const create = useMutation({
+    mutationFn: (payload: PropertyPayload) =>
+      apiRequest<Property>("/api/properties", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.properties });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.reportsSummary,
+      });
+    },
+  });
   return (
     <PropertyDialog
       trigger={
-        <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 cursor-pointer gap-1.5">
+        <Button
+          size="sm"
+          className="bg-accent text-accent-foreground hover:bg-accent/90 cursor-pointer gap-1.5"
+        >
           <Plus className="w-3.5 h-3.5" /> New property
         </Button>
       }
       onSave={async (f) => {
-        await create({ ...f, monthlyRent: parseFloat(f.monthlyRent) });
+        await create.mutateAsync({
+          ...f,
+          monthlyRent: parseFloat(f.monthlyRent),
+        });
         toast.success("Property created");
       }}
     />
   );
 }
 
-export function EditPropertyButton({ property }: { property: Doc<"properties"> }) {
-  const update = useMutation(api.properties.update);
+export function EditPropertyButton({ property }: { property: Property }) {
+  const queryClient = useQueryClient();
+  const update = useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: number;
+      payload: Partial<PropertyPayload>;
+    }) =>
+      apiRequest<Property>(`/api/properties/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.properties });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.reportsSummary,
+      });
+    },
+  });
   return (
     <PropertyDialog
       trigger={
@@ -141,17 +246,39 @@ export function EditPropertyButton({ property }: { property: Doc<"properties"> }
           <Pencil className="w-3.5 h-3.5" />
         </button>
       }
-      initial={{ ...property, monthlyRent: String(property.monthlyRent) }}
+      initial={{
+        name: property.name,
+        address: property.address,
+        type: property.type,
+        owner: property.owner,
+        monthlyRent: String(property.monthlyRent),
+        status: property.status,
+      }}
       onSave={async (f) => {
-        await update({ id: property._id, ...f, monthlyRent: parseFloat(f.monthlyRent) });
+        await update.mutateAsync({
+          id: property.id,
+          payload: { ...f, monthlyRent: parseFloat(f.monthlyRent) },
+        });
         toast.success("Property updated");
       }}
     />
   );
 }
 
-export function DeletePropertyButton({ id }: { id: Id<"properties"> }) {
-  const remove = useMutation(api.properties.remove);
+export function DeletePropertyButton({ id }: { id: number }) {
+  const queryClient = useQueryClient();
+  const remove = useMutation({
+    mutationFn: () =>
+      apiRequest<void>(`/api/properties/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.properties });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.expenses });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.reportsSummary,
+      });
+    },
+  });
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -161,13 +288,23 @@ export function DeletePropertyButton({ id }: { id: Id<"properties"> }) {
         </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
-        <DialogHeader><DialogTitle>Delete property?</DialogTitle></DialogHeader>
-        <p className="text-[13px] text-muted-foreground">This action cannot be undone.</p>
+        <DialogHeader>
+          <DialogTitle>Delete property?</DialogTitle>
+        </DialogHeader>
+        <p className="text-[13px] text-muted-foreground">
+          This action cannot be undone.
+        </p>
         <div className="flex justify-end gap-2 pt-2">
-          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="ghost" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
           <Button
             className="bg-destructive text-white hover:bg-destructive/90"
-            onClick={async () => { await remove({ id }); setOpen(false); toast.success("Property deleted"); }}
+            onClick={async () => {
+              await remove.mutateAsync();
+              setOpen(false);
+              toast.success("Property deleted");
+            }}
           >
             Delete
           </Button>
@@ -176,6 +313,3 @@ export function DeletePropertyButton({ id }: { id: Id<"properties"> }) {
     </Dialog>
   );
 }
-
-// Re-export useQuery for convenience
-export { useQuery };

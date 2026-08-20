@@ -1,16 +1,27 @@
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/api-client.ts";
+import { queryKeys } from "@/lib/query-keys.ts";
+import type { Expense, Property } from "@/lib/api-types.ts";
 import { motion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { CheckCircle2, XCircle } from "lucide-react";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
-import { AddExpenseButton, EditExpenseButton, DeleteExpenseButton } from "./_components/ExpenseCrud.tsx";
+import {
+  AddExpenseButton,
+  EditExpenseButton,
+  DeleteExpenseButton,
+} from "./_components/ExpenseCrud.tsx";
 
 const formatMXN = (amount: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(amount);
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 0,
+  }).format(amount);
 
 const formatDate = (dateStr: string) =>
-  new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(new Date(dateStr));
+  new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(
+    new Date(dateStr),
+  );
 
 const statusStyle: Record<string, string> = {
   pendiente: "text-yellow-400 bg-yellow-400/10",
@@ -37,22 +48,60 @@ const categoryLabel: Record<string, string> = {
 };
 
 export default function ExpensesPage() {
-  const expenses = useQuery(api.expenses.list, {});
-  const properties = useQuery(api.properties.list, {});
-  const updateStatus = useMutation(api.expenses.updateStatus);
+  const queryClient = useQueryClient();
+  const expenses = useQuery({
+    queryKey: queryKeys.expenses,
+    queryFn: () => apiRequest<Expense[]>("/api/expenses"),
+  });
+  const properties = useQuery({
+    queryKey: queryKeys.properties,
+    queryFn: () => apiRequest<Property[]>("/api/properties"),
+  });
+  const updateStatus = useMutation({
+    mutationFn: ({
+      id,
+      status,
+      approvedBy,
+    }: {
+      id: number;
+      status: string;
+      approvedBy?: string;
+    }) =>
+      apiRequest<Expense>(`/api/expenses/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, ...(approvedBy ? { approvedBy } : {}) }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.expenses });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.reportsSummary,
+      });
+    },
+  });
 
-  const propMap = Object.fromEntries(properties?.map((p) => [p._id, p.name]) ?? []);
+  const propMap = Object.fromEntries(
+    (properties.data ?? []).map((p) => [p.id, p.name]),
+  );
+  const expenseRows = expenses.data ?? [];
 
-  const handleApprove = async (id: Id<"expenses">) => {
-    await updateStatus({ id, status: "aprobado", approvedBy: "Evox Coordinator" });
+  const handleApprove = async (id: number) => {
+    await updateStatus.mutateAsync({
+      id,
+      status: "aprobado",
+      approvedBy: "Evox Coordinator",
+    });
   };
 
-  const handleReject = async (id: Id<"expenses">) => {
-    await updateStatus({ id, status: "rechazado" });
+  const handleReject = async (id: number) => {
+    await updateStatus.mutateAsync({ id, status: "rechazado" });
   };
 
-  const totalApproved = expenses?.filter((e) => e.status === "aprobado").reduce((s, e) => s + e.amount, 0) ?? 0;
-  const totalPending = expenses?.filter((e) => e.status === "pendiente").reduce((s, e) => s + e.amount, 0) ?? 0;
+  const totalApproved = expenseRows
+    .filter((e) => e.status === "aprobado")
+    .reduce((s, e) => s + e.amount, 0);
+  const totalPending = expenseRows
+    .filter((e) => e.status === "pendiente")
+    .reduce((s, e) => s + e.amount, 0);
 
   return (
     <div className="p-6 md:p-8 max-w-4xl mx-auto">
@@ -63,8 +112,12 @@ export default function ExpensesPage() {
         className="mb-6 flex items-center justify-between"
       >
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Expenses & Authorizations</h1>
-          <p className="text-[13px] text-muted-foreground mt-0.5">Expense control and approval</p>
+          <h1 className="text-xl font-bold tracking-tight">
+            Expenses & Authorizations
+          </h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">
+            Expense control and approval
+          </p>
         </div>
         <AddExpenseButton />
       </motion.div>
@@ -72,8 +125,16 @@ export default function ExpensesPage() {
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         {[
-          { label: "Total Approved", value: formatMXN(totalApproved), style: "text-emerald-400" },
-          { label: "Pending Approval", value: formatMXN(totalPending), style: "text-yellow-400" },
+          {
+            label: "Total Approved",
+            value: formatMXN(totalApproved),
+            style: "text-emerald-400",
+          },
+          {
+            label: "Pending Approval",
+            value: formatMXN(totalPending),
+            style: "text-yellow-400",
+          },
         ].map((s, i) => (
           <motion.div
             key={s.label}
@@ -82,25 +143,33 @@ export default function ExpensesPage() {
             transition={{ duration: 0.25, delay: i * 0.05 }}
             className="bg-card border border-border rounded-xl p-4"
           >
-            <p className="text-[11px] text-muted-foreground uppercase tracking-wide mb-1">{s.label}</p>
-            <p className={`text-xl font-bold tabular-nums ${s.style}`}>{s.value}</p>
+            <p className="text-[11px] text-muted-foreground uppercase tracking-wide mb-1">
+              {s.label}
+            </p>
+            <p className={`text-xl font-bold tabular-nums ${s.style}`}>
+              {s.value}
+            </p>
           </motion.div>
         ))}
       </div>
 
       {/* List */}
-      {expenses === undefined ? (
+      {expenses.isPending ? (
         <div className="space-y-2">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-xl" />
+          ))}
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
-          {expenses.length === 0 && (
-            <p className="text-center text-muted-foreground py-12 text-[13px]">No expenses recorded.</p>
+          {expenseRows.length === 0 && (
+            <p className="text-center text-muted-foreground py-12 text-[13px]">
+              No expenses recorded.
+            </p>
           )}
-          {expenses.map((exp, i) => (
+          {expenseRows.map((exp, i) => (
             <motion.div
-              key={exp._id}
+              key={exp.id}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, delay: i * 0.04 }}
@@ -108,15 +177,27 @@ export default function ExpensesPage() {
             >
               {/* Left */}
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold truncate mb-1">{exp.description}</p>
+                <p className="text-[13px] font-semibold truncate mb-1">
+                  {exp.description}
+                </p>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] text-muted-foreground">{propMap[exp.propertyId] ?? "—"}</span>
-                  <span className="text-muted-foreground/40 text-[11px]">·</span>
-                  <span className="text-[11px] text-muted-foreground">{formatDate(exp.date)}</span>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${categoryStyle[exp.category] ?? ""}`}>
+                  <span className="text-[11px] text-muted-foreground">
+                    {propMap[exp.propertyId] ?? "—"}
+                  </span>
+                  <span className="text-muted-foreground/40 text-[11px]">
+                    ·
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {formatDate(exp.date)}
+                  </span>
+                  <span
+                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${categoryStyle[exp.category] ?? ""}`}
+                  >
                     {categoryLabel[exp.category] ?? exp.category}
                   </span>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[exp.status] ?? ""}`}>
+                  <span
+                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[exp.status] ?? ""}`}
+                  >
                     {statusLabel[exp.status] ?? exp.status}
                   </span>
                   {exp.status === "aprobado" && exp.approvedBy && (
@@ -130,20 +211,22 @@ export default function ExpensesPage() {
 
               {/* Right */}
               <div className="flex items-center gap-2 shrink-0">
-                <p className="text-[14px] font-bold tabular-nums">{formatMXN(exp.amount)}</p>
+                <p className="text-[14px] font-bold tabular-nums">
+                  {formatMXN(exp.amount)}
+                </p>
                 <EditExpenseButton expense={exp} />
-                <DeleteExpenseButton id={exp._id} />
+                <DeleteExpenseButton id={exp.id} />
                 {exp.status === "pendiente" && (
                   <>
                     <button
-                      onClick={() => handleReject(exp._id as Id<"expenses">)}
+                      onClick={() => void handleReject(exp.id)}
                       className="w-7 h-7 rounded-lg flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors cursor-pointer"
                       title="Reject"
                     >
                       <XCircle className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handleApprove(exp._id as Id<"expenses">)}
+                      onClick={() => void handleApprove(exp.id)}
                       className="w-7 h-7 rounded-lg flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors cursor-pointer"
                       title="Approve"
                     >

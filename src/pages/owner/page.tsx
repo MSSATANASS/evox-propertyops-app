@@ -1,6 +1,9 @@
-import { useQuery } from "convex/react";
-import { useParams, Link } from "react-router-dom";
-import { api } from "@/convex/_generated/api.js";
+import { useQuery } from "@tanstack/react-query";
+import { useParams, Link, Navigate } from "react-router-dom";
+import { apiRequest, ApiError } from "@/lib/api-client.ts";
+import { queryKeys } from "@/lib/query-keys.ts";
+import type { OwnerPortalData } from "@/lib/api-types.ts";
+import { useLocalAuth } from "@/components/providers/local-auth.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { motion } from "motion/react";
 import {
@@ -76,7 +79,14 @@ type StatCardProps = {
   delay?: number;
 };
 
-function StatCard({ label, value, sub, icon, color, delay = 0 }: StatCardProps) {
+function StatCard({
+  label,
+  value,
+  sub,
+  icon,
+  color,
+  delay = 0,
+}: StatCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -85,8 +95,12 @@ function StatCard({ label, value, sub, icon, color, delay = 0 }: StatCardProps) 
       className="bg-card border border-border rounded-xl p-5"
     >
       <div className="flex items-start justify-between mb-3">
-        <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">{label}</p>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
+        <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">
+          {label}
+        </p>
+        <div
+          className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}
+        >
           {icon}
         </div>
       </div>
@@ -98,10 +112,18 @@ function StatCard({ label, value, sub, icon, color, delay = 0 }: StatCardProps) 
 
 export default function OwnerPortalPage() {
   const { ownerSlug } = useParams<{ ownerSlug: string }>();
-  const ownerName = ownerSlug ? decodeURIComponent(ownerSlug) : "";
-  const data = useQuery(api.ownerPortal.getByOwner, { ownerName });
+  const { status } = useLocalAuth();
+  const report = useQuery({
+    queryKey: queryKeys.ownerPortal(ownerSlug ?? ""),
+    queryFn: () =>
+      apiRequest<OwnerPortalData>(
+        `/api/reports/owner/${encodeURIComponent(ownerSlug ?? "")}`,
+      ),
+    enabled: Boolean(ownerSlug) && status === "authenticated",
+  });
+  const data = report.data;
 
-  if (data === undefined) {
+  if (status === "loading" || report.isPending) {
     return (
       <div className="min-h-screen bg-background p-6 md:p-10 max-w-4xl mx-auto">
         <div className="space-y-4">
@@ -113,7 +135,11 @@ export default function OwnerPortalPage() {
     );
   }
 
-  if (data === null) {
+  if (status === "unauthenticated") {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (report.error instanceof ApiError && report.error.status === 404) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4 p-8">
@@ -129,7 +155,26 @@ export default function OwnerPortalPage() {
     );
   }
 
-  const month = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date());
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4 p-8">
+          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto">
+            <AlertCircle className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <h1 className="text-xl font-bold">Unable to load owner portal</h1>
+          <p className="text-muted-foreground text-[13px] max-w-xs mx-auto">
+            Please try again or contact your Evox coordinator.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const month = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date());
 
   return (
     <div className="min-h-screen bg-background">
@@ -141,12 +186,18 @@ export default function OwnerPortalPage() {
               <Building2 className="w-4 h-4 text-primary-foreground" />
             </div>
             <div>
-              <p className="text-[11px] text-muted-foreground leading-none">PropertyOps by Evox</p>
-              <p className="text-[13px] font-semibold leading-tight">{data.ownerName}</p>
+              <p className="text-[11px] text-muted-foreground leading-none">
+                PropertyOps by Evox
+              </p>
+              <p className="text-[13px] font-semibold leading-tight">
+                {data.ownerName}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-muted-foreground hidden sm:block capitalize">{month}</span>
+            <span className="text-[11px] text-muted-foreground hidden sm:block capitalize">
+              {month}
+            </span>
             <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary">
               Read only
             </span>
@@ -165,7 +216,9 @@ export default function OwnerPortalPage() {
             Your portfolio summary
           </h1>
           <p className="text-[13px] text-muted-foreground mt-1">
-            {data.properties.length} propert{data.properties.length !== 1 ? "ies" : "y"} under management · Updated in real time
+            {data.properties.length} propert
+            {data.properties.length !== 1 ? "ies" : "y"} under management ·
+            Updated in real time
           </p>
         </motion.div>
 
@@ -213,7 +266,7 @@ export default function OwnerPortalPage() {
           <div className="grid md:grid-cols-2 gap-3">
             {data.properties.map((p, i) => (
               <motion.div
-                key={p._id}
+                key={p.id}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.25 + i * 0.07 }}
@@ -221,11 +274,13 @@ export default function OwnerPortalPage() {
               >
                 <div className="flex items-start justify-between mb-2">
                   <h3 className="text-[14px] font-semibold">{p.name}</h3>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                    p.status === "ocupado"
-                      ? "text-emerald-400 bg-emerald-400/10"
-                      : "text-yellow-400 bg-yellow-400/10"
-                  }`}>
+                  <span
+                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                      p.status === "ocupado"
+                        ? "text-emerald-400 bg-emerald-400/10"
+                        : "text-yellow-400 bg-yellow-400/10"
+                    }`}
+                  >
                     {p.status === "ocupado" ? "Occupied" : "Vacant"}
                   </span>
                 </div>
@@ -234,8 +289,12 @@ export default function OwnerPortalPage() {
                   {p.address}
                 </div>
                 <div className="pt-3 border-t border-border flex items-center justify-between">
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Monthly Rent</span>
-                  <span className="text-[15px] font-bold tabular-nums">{formatMXN(p.monthlyRent)}</span>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                    Monthly Rent
+                  </span>
+                  <span className="text-[15px] font-bold tabular-nums">
+                    {formatMXN(p.monthlyRent)}
+                  </span>
                 </div>
               </motion.div>
             ))}
@@ -250,29 +309,45 @@ export default function OwnerPortalPage() {
             </h2>
             <div className="bg-card border border-border rounded-xl overflow-hidden">
               {data.tasks.map((task, i) => {
-                const propName = data.properties.find((p) => p._id === task.propertyId)?.name ?? "—";
+                const propName =
+                  data.properties.find((p) => p.id === task.propertyId)?.name ??
+                  "—";
                 return (
                   <motion.div
-                    key={task._id}
+                    key={task.id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.25, delay: 0.35 + i * 0.04 }}
                     className={`flex items-start gap-3 px-5 py-4 ${i > 0 ? "border-t border-border" : ""}`}
                   >
-                    <div className={`w-1.5 h-1.5 rounded-full mt-2 shrink-0 ${priorityDot[task.priority] ?? "bg-muted-foreground"}`} />
+                    <div
+                      className={`w-1.5 h-1.5 rounded-full mt-2 shrink-0 ${priorityDot[task.priority] ?? "bg-muted-foreground"}`}
+                    />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold mb-0.5">{task.title}</p>
-                      <p className="text-[11px] text-muted-foreground mb-1.5">{propName}</p>
+                      <p className="text-[13px] font-semibold mb-0.5">
+                        {task.title}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mb-1.5">
+                        {propName}
+                      </p>
                       {task.description && (
-                        <p className="text-[12px] text-muted-foreground leading-relaxed mb-2">{task.description}</p>
+                        <p className="text-[12px] text-muted-foreground leading-relaxed mb-2">
+                          {task.description}
+                        </p>
                       )}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] text-muted-foreground">{task.assignedTo}</span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${taskStatusStyle[task.status] ?? ""}`}>
+                        <span className="text-[10px] text-muted-foreground">
+                          {task.assignedTo}
+                        </span>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${taskStatusStyle[task.status] ?? ""}`}
+                        >
                           {statusLabel[task.status]}
                         </span>
                         {task.priority && (
-                          <span className="text-[10px] text-muted-foreground">Priority: {priorityLabel[task.priority]}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            Priority: {priorityLabel[task.priority]}
+                          </span>
                         )}
                         {task.completedAt && (
                           <span className="flex items-center gap-1 text-[10px] text-emerald-400">
@@ -304,25 +379,35 @@ export default function OwnerPortalPage() {
             </h2>
             <div className="bg-card border border-border rounded-xl overflow-hidden">
               {data.expenses.map((exp, i) => {
-                const propName = data.properties.find((p) => p._id === exp.propertyId)?.name ?? "—";
+                const propName =
+                  data.properties.find((p) => p.id === exp.propertyId)?.name ??
+                  "—";
                 return (
                   <motion.div
-                    key={exp._id}
+                    key={exp.id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.25, delay: 0.4 + i * 0.04 }}
                     className={`flex items-center gap-3 px-5 py-4 ${i > 0 ? "border-t border-border" : ""}`}
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold mb-1">{exp.description}</p>
+                      <p className="text-[13px] font-semibold mb-1">
+                        {exp.description}
+                      </p>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] text-muted-foreground">{propName}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {propName}
+                        </span>
                         <span className="text-muted-foreground/40">·</span>
-                        <span className="text-[11px] text-muted-foreground">{formatDate(exp.date)}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatDate(exp.date)}
+                        </span>
                         <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                           {categoryLabel[exp.category] ?? exp.category}
                         </span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${expenseStatusStyle[exp.status] ?? ""}`}>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${expenseStatusStyle[exp.status] ?? ""}`}
+                        >
                           {statusLabel[exp.status]}
                         </span>
                         {exp.approvedBy && (
@@ -333,7 +418,9 @@ export default function OwnerPortalPage() {
                         )}
                       </div>
                     </div>
-                    <p className="text-[14px] font-bold tabular-nums shrink-0">{formatMXN(exp.amount)}</p>
+                    <p className="text-[14px] font-bold tabular-nums shrink-0">
+                      {formatMXN(exp.amount)}
+                    </p>
                   </motion.div>
                 );
               })}
@@ -349,8 +436,13 @@ export default function OwnerPortalPage() {
           className="border-t border-border pt-6 pb-8 flex items-center justify-between"
         >
           <div>
-            <p className="text-[12px] text-muted-foreground">Managed by <span className="font-semibold text-foreground">Evox</span></p>
-            <p className="text-[11px] text-muted-foreground">PropertyOps · This view is read-only</p>
+            <p className="text-[12px] text-muted-foreground">
+              Managed by{" "}
+              <span className="font-semibold text-foreground">Evox</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              PropertyOps · This view is read-only
+            </p>
           </div>
           <Link
             to="/"
