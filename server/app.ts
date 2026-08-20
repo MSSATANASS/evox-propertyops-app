@@ -72,9 +72,10 @@ export function createApp(options: CreateAppOptions): Express {
       }
 
       if (
-        error instanceof SyntaxError &&
+        error &&
+        typeof error === "object" &&
         "status" in error &&
-        (error as SyntaxError & { status?: number }).status === 413
+        (error as { status?: number }).status === 413
       ) {
         response.status(413).json({
           code: "PAYLOAD_TOO_LARGE",

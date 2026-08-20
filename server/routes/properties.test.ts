@@ -71,6 +71,25 @@ describe("property routes", () => {
     expect(response.body).toMatchObject({ code: "VALIDATION_ERROR" });
   });
 
+  it("rejects request bodies above the configured limit", async () => {
+    const context = await createRouteTestContext();
+    contexts.push(context);
+
+    const response = await context.agent
+      .post("/api/properties")
+      .send({
+        name: "x".repeat(120_000),
+        address: "Calle 1",
+        type: "Casa",
+        owner: "Owner",
+        monthlyRent: 1000,
+        status: "ocupado",
+      })
+      .expect(413);
+
+    expect(response.body).toMatchObject({ code: "PAYLOAD_TOO_LARGE" });
+  });
+
   it("requires a session and reports missing properties", async () => {
     const context = await createRouteTestContext();
     contexts.push(context);
