@@ -46,10 +46,7 @@ function toUser(row: UserRow): User {
 const userColumns =
   "id, email, name, role, owner_slug, password_hash, created_at, updated_at";
 
-export function findUserByEmail(
-  db: DatabaseSync,
-  email: string,
-): User | null {
+export function findUserByEmail(db: DatabaseSync, email: string): User | null {
   const row = db
     .prepare(`SELECT ${userColumns} FROM users WHERE email = ?`)
     .get(email.toLowerCase()) as unknown as UserRow | undefined;
@@ -60,6 +57,15 @@ export function findUserById(db: DatabaseSync, id: number): User | null {
   const row = db
     .prepare(`SELECT ${userColumns} FROM users WHERE id = ?`)
     .get(id) as unknown as UserRow | undefined;
+  return row ? toUser(row) : null;
+}
+
+export function findFirstAdmin(db: DatabaseSync): User | null {
+  const row = db
+    .prepare(
+      `SELECT ${userColumns} FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1`,
+    )
+    .get() as unknown as UserRow | undefined;
   return row ? toUser(row) : null;
 }
 

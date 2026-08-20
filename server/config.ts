@@ -1,4 +1,4 @@
-import type { AppConfig, NodeEnvironment } from "./types";
+import type { AppConfig, NodeEnvironment } from "./types.js";
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_DATABASE_PATH = "./data/propertyops.sqlite";
