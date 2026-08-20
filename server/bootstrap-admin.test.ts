@@ -1,8 +1,11 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { verifyPassword } from "./auth/passwords";
 import { openDatabase } from "./db/index";
 import { findUserByEmail } from "./db/repositories/users";
-import { bootstrapAdmin } from "./bootstrap-admin";
+import { bootstrapAdmin, runBootstrapAdmin } from "./bootstrap-admin";
 
 const databases: ReturnType<typeof openDatabase>[] = [];
 
@@ -28,9 +31,9 @@ describe("bootstrap admin", () => {
       name: "Administrador Evox",
     });
     expect(admin.passwordHash).not.toContain("initial-password");
-    await expect(verifyPassword("initial-password", admin.passwordHash)).resolves.toBe(
-      true,
-    );
+    await expect(
+      verifyPassword("initial-password", admin.passwordHash),
+    ).resolves.toBe(true);
   });
 
   it("fails without an admin password", async () => {
@@ -58,5 +61,27 @@ describe("bootstrap admin", () => {
     ).rejects.toThrow("admin already exists");
     expect(findUserByEmail(db, "other@example.com")).toBeNull();
   });
-});
 
+  it("runs against the configured temporary SQLite file", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "propertyops-bootstrap-"));
+    const databasePath = join(directory, "propertyops.sqlite");
+
+    try {
+      await runBootstrapAdmin({
+        NODE_ENV: "test",
+        DATABASE_PATH: databasePath,
+        ADMIN_EMAIL: "file-admin@example.com",
+        ADMIN_PASSWORD: "file-password",
+      });
+
+      const db = openDatabase(databasePath);
+      databases.push(db);
+      expect(findUserByEmail(db, "file-admin@example.com")).not.toBeNull();
+    } finally {
+      for (const db of databases.splice(0)) {
+        db.close();
+      }
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
