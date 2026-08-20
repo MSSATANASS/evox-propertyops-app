@@ -1,14 +1,29 @@
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/api-client.ts";
+import { queryKeys } from "@/lib/query-keys.ts";
+import type { Property, Task } from "@/lib/api-types.ts";
 import { useState } from "react";
 import { motion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog.tsx";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+} from "@/components/ui/dialog.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import { User, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
-import { AddTaskButton, EditTaskButton, DeleteTaskButton } from "./_components/TaskCrud.tsx";
+import {
+  AddTaskButton,
+  EditTaskButton,
+  DeleteTaskButton,
+} from "./_components/TaskCrud.tsx";
 
 type StatusFilter = "all" | "pendiente" | "en_proceso" | "completada";
 
@@ -50,19 +65,51 @@ const tabs: { key: StatusFilter; label: string }[] = [
 ];
 
 const formatDate = (dateStr: string) =>
-  new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", year: "numeric" }).format(new Date(dateStr));
+  new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(dateStr));
 
 export default function TasksPage() {
-  const tasks = useQuery(api.tasks.list, {});
-  const properties = useQuery(api.properties.list, {});
-  const updateStatus = useMutation(api.tasks.updateStatus);
+  const queryClient = useQueryClient();
+  const tasks = useQuery({
+    queryKey: queryKeys.tasks,
+    queryFn: () => apiRequest<Task[]>("/api/tasks"),
+  });
+  const properties = useQuery({
+    queryKey: queryKeys.properties,
+    queryFn: () => apiRequest<Property[]>("/api/properties"),
+  });
+  const updateStatus = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiRequest<Task>(`/api/tasks/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status,
+          ...(status === "completada"
+            ? { completedAt: new Date().toISOString() }
+            : {}),
+        }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.reportsSummary,
+      });
+    },
+  });
   const [filter, setFilter] = useState<StatusFilter>("all");
 
-  const propMap = Object.fromEntries(properties?.map((p) => [p._id, p.name]) ?? []);
-  const filtered = tasks?.filter((t) => filter === "all" || t.status === filter) ?? [];
+  const propMap = Object.fromEntries(
+    (properties.data ?? []).map((p) => [p.id, p.name]),
+  );
+  const filtered = (tasks.data ?? []).filter(
+    (t) => filter === "all" || t.status === filter,
+  );
 
-  const handleStatusChange = async (id: Id<"tasks">, status: string) => {
-    await updateStatus({ id, status });
+  const handleStatusChange = async (id: number, status: string) => {
+    await updateStatus.mutateAsync({ id, status });
   };
 
   return (
@@ -74,8 +121,12 @@ export default function TasksPage() {
         className="mb-6 flex items-center justify-between"
       >
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Maintenance Tasks</h1>
-          <p className="text-[13px] text-muted-foreground mt-0.5">Active work orders</p>
+          <h1 className="text-xl font-bold tracking-tight">
+            Maintenance Tasks
+          </h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">
+            Active work orders
+          </p>
         </div>
         <AddTaskButton />
       </motion.div>
@@ -90,7 +141,7 @@ export default function TasksPage() {
               "px-3 py-1.5 rounded-md text-[12px] font-medium transition-all cursor-pointer",
               filter === tab.key
                 ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             {tab.label}
@@ -98,15 +149,17 @@ export default function TasksPage() {
         ))}
       </div>
 
-      {tasks === undefined ? (
+      {tasks.isPending ? (
         <div className="space-y-2">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full rounded-xl" />
+          ))}
         </div>
       ) : (
         <div className="space-y-2">
           {filtered.map((task, i) => (
             <motion.div
-              key={task._id}
+              key={task.id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, delay: i * 0.04 }}
@@ -124,7 +177,11 @@ export default function TasksPage() {
                       />
                     </DialogTrigger>
                     <DialogContent className="max-w-lg">
-                      <img src={task.photoUrl} alt="Evidence" className="w-full rounded-lg" />
+                      <img
+                        src={task.photoUrl}
+                        alt="Evidence"
+                        className="w-full rounded-lg"
+                      />
                     </DialogContent>
                   </Dialog>
                 )}
@@ -133,23 +190,35 @@ export default function TasksPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[task.priority] ?? "bg-muted-foreground"}`} />
-                      <h3 className="text-[14px] font-semibold leading-tight truncate">{task.title}</h3>
+                      <div
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[task.priority] ?? "bg-muted-foreground"}`}
+                      />
+                      <h3 className="text-[14px] font-semibold leading-tight truncate">
+                        {task.title}
+                      </h3>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${priorityStyle[task.priority] ?? ""}`}>
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${priorityStyle[task.priority] ?? ""}`}
+                      >
                         {priorityLabel[task.priority] ?? task.priority}
                       </span>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[task.status] ?? ""}`}>
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[task.status] ?? ""}`}
+                      >
                         {statusLabel[task.status]}
                       </span>
                       <EditTaskButton task={task} />
-                      <DeleteTaskButton id={task._id} />
+                      <DeleteTaskButton id={task.id} />
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-muted-foreground font-medium mb-1.5">{propMap[task.propertyId] ?? "—"}</p>
-                  <p className="text-[12px] text-muted-foreground leading-relaxed mb-3">{task.description}</p>
+                  <p className="text-[11px] text-muted-foreground font-medium mb-1.5">
+                    {propMap[task.propertyId] ?? "—"}
+                  </p>
+                  <p className="text-[12px] text-muted-foreground leading-relaxed mb-3">
+                    {task.description}
+                  </p>
 
                   <div className="flex items-center gap-4 flex-wrap">
                     <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -165,14 +234,18 @@ export default function TasksPage() {
                     <div className="ml-auto">
                       <Select
                         value={task.status}
-                        onValueChange={(val) => handleStatusChange(task._id as Id<"tasks">, val)}
+                        onValueChange={(val) =>
+                          void handleStatusChange(task.id, val)
+                        }
                       >
                         <SelectTrigger className="h-7 text-[11px] w-32 bg-muted border-border">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pendiente">Pending</SelectItem>
-                          <SelectItem value="en_proceso">In Progress</SelectItem>
+                          <SelectItem value="en_proceso">
+                            In Progress
+                          </SelectItem>
                           <SelectItem value="completada">Completed</SelectItem>
                         </SelectContent>
                       </Select>
@@ -183,7 +256,9 @@ export default function TasksPage() {
             </motion.div>
           ))}
           {filtered.length === 0 && (
-            <p className="text-center text-muted-foreground py-12 text-[13px]">No tasks in this category.</p>
+            <p className="text-center text-muted-foreground py-12 text-[13px]">
+              No tasks in this category.
+            </p>
           )}
         </div>
       )}

@@ -1,7 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { useServiceWorker } from "@/hooks/use-service-worker.ts";
 import { DefaultProviders } from "./components/providers/default.tsx";
-import AuthCallback from "./pages/auth/Callback.tsx";
+import LoginPage from "./pages/auth/Login.tsx";
 import AppLayout from "./pages/_layout/AppLayout.tsx";
 import Index from "./pages/Index.tsx";
 import PropertiesPage from "./pages/properties/page.tsx";
@@ -18,7 +18,7 @@ export default function App() {
     <DefaultProviders>
       <BrowserRouter>
         <Routes>
-          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route element={<AppLayout />}>
             <Route path="/" element={<Index />} />
             <Route path="/properties" element={<PropertiesPage />} />
