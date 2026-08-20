@@ -9,6 +9,9 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     allowedHosts: true,
+    proxy: {
+      "/api": "http://127.0.0.1:3000",
+    },
     hmr: {
       overlay: false,
     },

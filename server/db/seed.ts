@@ -1,4 +1,9 @@
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type { DatabaseSync } from "node:sqlite";
+import { loadConfig } from "../config.js";
+import { openDatabase } from "./index.js";
 
 export interface SeedCounts {
   properties: number;
@@ -180,4 +185,29 @@ export function seedDemoData(db: DatabaseSync): SeedCounts {
     db.exec("ROLLBACK");
     throw error;
   }
+}
+
+export async function runSeedDemo(): Promise<SeedCounts> {
+  const config = loadConfig(process.env);
+  await mkdir(path.dirname(config.databasePath), { recursive: true });
+  const db = openDatabase(config.databasePath);
+  try {
+    return seedDemoData(db);
+  } finally {
+    db.close();
+  }
+}
+
+const entrypoint = process.argv[1]
+  ? pathToFileURL(path.resolve(process.argv[1])).href
+  : undefined;
+if (entrypoint === import.meta.url) {
+  runSeedDemo()
+    .then((counts) => {
+      console.log(JSON.stringify(counts));
+    })
+    .catch((error: unknown) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
 }

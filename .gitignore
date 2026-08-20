@@ -1,7 +1,9 @@
 node_modules/
 dist/
+dist-server/
+data/
+.tmp-data/
 .vite/
-.convex/
 coverage/
 *.log
 .env

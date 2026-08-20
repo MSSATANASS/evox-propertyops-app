@@ -13,6 +13,7 @@ import { registerReportRoutes } from "./routes/reports.js";
 import { registerTaskRoutes } from "./routes/tasks.js";
 import { SCHEMA_VERSION } from "./db/schema.js";
 import { HttpError } from "./validation.js";
+import { mountStatic } from "./static.js";
 import type { AppConfig } from "./types.js";
 
 export interface CreateAppOptions {
@@ -46,8 +47,19 @@ export function createApp(options: CreateAppOptions): Express {
   registerOwnerRoutes(router, options);
   app.use(router);
 
+  app.use((request, response, next) => {
+    if (request.path === "/api" || request.path.startsWith("/api/")) {
+      response.status(404).json({
+        code: "NOT_FOUND",
+        message: "route not found",
+      });
+      return;
+    }
+    next();
+  });
+
   if (options.staticDir) {
-    app.use(express.static(options.staticDir));
+    mountStatic(app, options.staticDir);
   }
 
   app.use(

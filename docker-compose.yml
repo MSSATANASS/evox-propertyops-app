@@ -1,0 +1,15 @@
+services:
+  propertyops:
+    build: .
+    container_name: propertyops-standalone
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:3000"
+    volumes:
+      - /opt/propertyops/data:/data
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_PATH: /data/propertyops.sqlite
+      SESSION_TTL_SECONDS: "28800"
+      COOKIE_SECURE: "false"
