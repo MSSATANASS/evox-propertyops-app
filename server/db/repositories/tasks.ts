@@ -38,12 +38,11 @@ export interface TaskFilters {
   propertyId?: number;
   status?: string;
   priority?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
-export function listTasks(
-  db: DatabaseSync,
-  filters: TaskFilters = {},
-): Task[] {
+export function listTasks(db: DatabaseSync, filters: TaskFilters = {}): Task[] {
   const clauses: string[] = [];
   const values: Array<string | number> = [];
   if (filters.propertyId !== undefined) {
@@ -57,6 +56,14 @@ export function listTasks(
   if (filters.priority !== undefined) {
     clauses.push("priority = ?");
     values.push(filters.priority);
+  }
+  if (filters.dateFrom !== undefined) {
+    clauses.push("created_at >= ?");
+    values.push(filters.dateFrom);
+  }
+  if (filters.dateTo !== undefined) {
+    clauses.push("created_at <= ?");
+    values.push(filters.dateTo);
   }
   const where = clauses.length > 0 ? ` WHERE ${clauses.join(" AND ")}` : "";
   const rows = db
