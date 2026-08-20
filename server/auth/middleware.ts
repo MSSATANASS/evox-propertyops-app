@@ -21,7 +21,11 @@ function readCookie(request: Request, name: string): string | null {
   for (const part of header.split(";")) {
     const [key, ...valueParts] = part.trim().split("=");
     if (key === name) {
-      return decodeURIComponent(valueParts.join("="));
+      try {
+        return decodeURIComponent(valueParts.join("="));
+      } catch {
+        return null;
+      }
     }
   }
 
