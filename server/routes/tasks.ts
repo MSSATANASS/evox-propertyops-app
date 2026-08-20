@@ -4,6 +4,7 @@ import { runAuditedMutation } from "../audit.js";
 import { requireUser } from "../auth/middleware.js";
 import {
   createTask,
+  deleteTask,
   getTask,
   listTasks,
   updateTask,
@@ -74,5 +75,23 @@ export function registerTaskRoutes(
       (result) => result.id,
     );
     response.status(200).json(task);
+  });
+
+  router.delete("/api/tasks/:id", authenticated, (request, response) => {
+    const { id } = parse(idParamSchema, request.params);
+    runAuditedMutation(
+      db,
+      request.user!.id,
+      "delete",
+      "task",
+      () => {
+        if (!deleteTask(db, id)) {
+          throw notFound("task");
+        }
+        return id;
+      },
+      (result) => result,
+    );
+    response.status(204).send();
   });
 }

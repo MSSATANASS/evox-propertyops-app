@@ -59,6 +59,35 @@ describe("property routes", () => {
     ).toBe(2);
   });
 
+  it("deletes a property and returns an empty collection", async () => {
+    const context = await createRouteTestContext();
+    contexts.push(context);
+
+    const created = await context.agent
+      .post("/api/properties")
+      .send({
+        name: "Casa para borrar",
+        address: "Calle 10",
+        type: "Casa",
+        owner: "Owner",
+        monthlyRent: 1000,
+        status: "desocupado",
+      })
+      .expect(201);
+
+    await context.agent
+      .delete(`/api/properties/${created.body.id}`)
+      .expect(204);
+    await context.agent.get("/api/properties").expect(200).expect([]);
+    expect(
+      (
+        context.db
+          .prepare("SELECT COUNT(*) AS count FROM audit_events")
+          .get() as { count: number }
+      ).count,
+    ).toBe(2);
+  });
+
   it("returns a validation error for an incomplete property", async () => {
     const context = await createRouteTestContext();
     contexts.push(context);

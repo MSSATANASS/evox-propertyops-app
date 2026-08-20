@@ -66,6 +66,11 @@ export function createProperty(
   return getProperty(db, Number(result.lastInsertRowid))!;
 }
 
+export function deleteProperty(db: DatabaseSync, id: number): boolean {
+  const result = db.prepare("DELETE FROM properties WHERE id = ?").run(id);
+  return Number(result.changes) > 0;
+}
+
 export function updateProperty(
   db: DatabaseSync,
   id: number,

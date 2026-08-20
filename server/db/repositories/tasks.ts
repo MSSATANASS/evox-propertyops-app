@@ -100,6 +100,11 @@ export function createTask(db: DatabaseSync, input: TaskInput): Task {
   return getTask(db, Number(result.lastInsertRowid))!;
 }
 
+export function deleteTask(db: DatabaseSync, id: number): boolean {
+  const result = db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
+  return Number(result.changes) > 0;
+}
+
 export function updateTask(
   db: DatabaseSync,
   id: number,

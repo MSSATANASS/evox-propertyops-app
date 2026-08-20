@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-export type AuditOperation = "create" | "update";
+export type AuditOperation = "create" | "update" | "delete";
 
 export function recordAuditEvent(
   db: DatabaseSync,

@@ -93,6 +93,11 @@ export function createExpense(db: DatabaseSync, input: ExpenseInput): Expense {
   return getExpense(db, Number(result.lastInsertRowid))!;
 }
 
+export function deleteExpense(db: DatabaseSync, id: number): boolean {
+  const result = db.prepare("DELETE FROM expenses WHERE id = ?").run(id);
+  return Number(result.changes) > 0;
+}
+
 export function updateExpense(
   db: DatabaseSync,
   id: number,

@@ -4,6 +4,7 @@ import { runAuditedMutation } from "../audit.js";
 import { requireUser } from "../auth/middleware.js";
 import {
   createExpense,
+  deleteExpense,
   getExpense,
   listExpenses,
   updateExpense,
@@ -74,5 +75,23 @@ export function registerExpenseRoutes(
       (result) => result.id,
     );
     response.status(200).json(expense);
+  });
+
+  router.delete("/api/expenses/:id", authenticated, (request, response) => {
+    const { id } = parse(idParamSchema, request.params);
+    runAuditedMutation(
+      db,
+      request.user!.id,
+      "delete",
+      "expense",
+      () => {
+        if (!deleteExpense(db, id)) {
+          throw notFound("expense");
+        }
+        return id;
+      },
+      (result) => result,
+    );
+    response.status(204).send();
   });
 }

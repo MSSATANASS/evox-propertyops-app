@@ -4,6 +4,7 @@ import { runAuditedMutation } from "../audit.js";
 import { requireUser } from "../auth/middleware.js";
 import {
   createProperty,
+  deleteProperty,
   listProperties,
   updateProperty,
 } from "../db/repositories/properties.js";
@@ -61,5 +62,23 @@ export function registerPropertyRoutes(
       (result) => result.id,
     );
     response.status(200).json(property);
+  });
+
+  router.delete("/api/properties/:id", authenticated, (request, response) => {
+    const { id } = parse(idParamSchema, request.params);
+    runAuditedMutation(
+      db,
+      request.user!.id,
+      "delete",
+      "property",
+      () => {
+        if (!deleteProperty(db, id)) {
+          throw notFound("property");
+        }
+        return id;
+      },
+      (result) => result,
+    );
+    response.status(204).send();
   });
 }

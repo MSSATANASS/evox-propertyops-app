@@ -64,6 +64,37 @@ describe("task routes", () => {
     });
   });
 
+  it("deletes a task and removes it from the property task list", async () => {
+    const context = await createRouteTestContext();
+    contexts.push(context);
+    const property = createProperty(context.db, {
+      name: "Casa para tareas",
+      address: "Calle 11",
+      type: "Casa",
+      owner: "Owner",
+      monthlyRent: 1000,
+      status: "ocupado",
+    });
+    const created = await context.agent
+      .post("/api/tasks")
+      .send({
+        propertyId: property.id,
+        title: "Tarea para borrar",
+        description: "Temporal",
+        status: "pendiente",
+        priority: "baja",
+        assignedTo: "Admin",
+      })
+      .expect(201);
+
+    await context.agent.delete(`/api/tasks/${created.body.id}`).expect(204);
+    await context.agent
+      .get("/api/tasks")
+      .query({ propertyId: String(property.id) })
+      .expect(200)
+      .expect([]);
+  });
+
   it("rejects invalid task payloads and unknown properties", async () => {
     const context = await createRouteTestContext();
     contexts.push(context);

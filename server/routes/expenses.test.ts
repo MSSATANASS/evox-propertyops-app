@@ -63,6 +63,34 @@ describe("expense routes", () => {
     expect(approved.body[0].id).toBe(created.body.id);
   });
 
+  it("deletes an expense and removes it from the collection", async () => {
+    const context = await createRouteTestContext();
+    contexts.push(context);
+    const property = createProperty(context.db, {
+      name: "Casa para gasto",
+      address: "Calle 12",
+      type: "Casa",
+      owner: "Owner",
+      monthlyRent: 1000,
+      status: "ocupado",
+    });
+    const created = await context.agent
+      .post("/api/expenses")
+      .send({
+        propertyId: property.id,
+        description: "Gasto temporal",
+        amount: 100,
+        category: "servicios",
+        status: "pendiente",
+        requestedBy: "Admin",
+        date: "2026-08-20",
+      })
+      .expect(201);
+
+    await context.agent.delete(`/api/expenses/${created.body.id}`).expect(204);
+    await context.agent.get("/api/expenses").expect(200).expect([]);
+  });
+
   it("rejects invalid expense amounts and unknown properties", async () => {
     const context = await createRouteTestContext();
     contexts.push(context);
